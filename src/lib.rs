@@ -1458,7 +1458,15 @@ impl Connection {
 
                     self.tx_data -= data.len();
 
+                    let writable = stream.writable();
+
                     stream.send.push(data)?;
+
+                    // Only add stream to writable queue if it wasn't in the
+                    // queue already.
+                    if !writable {
+                        self.streams.push_writable(stream_id);
+                    }
                 },
 
                 frame::Frame::ACK { .. } => {
@@ -1685,10 +1693,9 @@ impl Connection {
             self.max_tx_data > self.tx_data &&
             left > frame::MAX_STREAM_OVERHEAD
         {
-            // TODO: round-robin selected stream instead of picking the first
-            for (id, stream) in
-                self.streams.iter_mut().filter(|(_, s)| s.writable())
-            {
+            while let Some(stream_id) = self.streams.pop_writable() {
+                let stream = self.streams.get_mut(stream_id).unwrap();
+
                 // Make sure we can fit the data in the packet.
                 let stream_len = cmp::min(
                     left - frame::MAX_STREAM_OVERHEAD,
@@ -1704,7 +1711,7 @@ impl Connection {
                 self.tx_data += stream_buf.len();
 
                 let frame = frame::Frame::Stream {
-                    stream_id: *id,
+                    stream_id,
                     data: stream_buf,
                 };
 
@@ -1715,6 +1722,11 @@ impl Connection {
 
                 ack_eliciting = true;
                 in_flight = true;
+
+                if stream.writable() {
+                    self.streams.push_writable(stream_id);
+                }
+
                 break;
             }
         }
@@ -1913,7 +1925,14 @@ impl Connection {
 
         // TODO: implement backpressure based on peer's flow control
 
+        let writable = stream.writable();
+
         stream.send.push_slice(buf, fin)?;
+
+        // Only add stream to writable queue if it wasn't in the queue already.
+        if !writable {
+            self.streams.push_writable(stream_id);
+        }
 
         Ok(buf.len())
     }

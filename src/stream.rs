@@ -30,6 +30,7 @@ use std::cmp;
 use std::collections::hash_map;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 
 use crate::Error;
 use crate::Result;
@@ -53,6 +54,11 @@ pub struct StreamMap {
 
     /// Local maximum unidirectional stream count limit.
     local_max_streams_uni: usize,
+
+    /// Queue of streams (identified by their ID) that have outstanding data
+    /// to send. Streams are added to the back of the list, and removed from
+    /// the front.
+    writable: VecDeque<u64>,
 }
 
 impl StreamMap {
@@ -119,6 +125,14 @@ impl StreamMap {
         Ok(stream)
     }
 
+    pub fn pop_writable(&mut self) -> Option<u64> {
+        self.writable.pop_front()
+    }
+
+    pub fn push_writable(&mut self, stream_id: u64) {
+        self.writable.push_back(stream_id);
+    }
+
     /// Updates the local maximum bidirectional stream count limit.
     pub fn update_local_max_streams_bidi(&mut self, v: usize) {
         self.local_max_streams_bidi = cmp::max(self.local_max_streams_bidi, v);
@@ -151,7 +165,7 @@ impl StreamMap {
 
     /// Returns true if there are any streams that have data to write.
     pub fn has_writable(&self) -> bool {
-        self.streams.values().any(Stream::writable)
+        !self.writable.is_empty()
     }
 
     /// Returns true if there are any streams that need to update the local
