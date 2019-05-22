@@ -440,6 +440,9 @@ fn build_response(
 ) -> Result<(std::vec::Vec<quiche::h3::Header>, std::vec::Vec<u8>), ()> {
     let mut file_path = std::path::PathBuf::from(root);
     let mut path = std::path::Path::new("");
+    let mut method = None;
+    let status;
+    let mut body = Vec::new();
 
     for hdr in request {
         match hdr.name() {
@@ -447,25 +450,32 @@ fn build_response(
                 path = std::path::Path::new(hdr.value());
             },
 
-            ":method" =>
-                if hdr.value() != "GET" {
-                    return Err(());
-                },
+            ":method" => method = Some(hdr.value()),
 
             _ => (),
         }
     }
 
-    for c in path.components() {
-        if let std::path::Component::Normal(v) = c {
-            file_path.push(v)
+    if method == Some("GET") {
+        for c in path.components() {
+            if let std::path::Component::Normal(v) = c {
+                file_path.push(v)
+            }
         }
-    }
 
-    let (status, body) = match std::fs::read(file_path.as_path()) {
-        Ok(data) => (200, data),
-        Err(_) => (404, b"Not Found!".to_vec()),
-    };
+        match std::fs::read(file_path.as_path()) {
+            Ok(data) => {
+                status = 200;
+                body = data;
+            },
+            Err(_) => {
+                status = 404;
+                body = b"Not Found!".to_vec();
+            },
+        };
+    } else {
+        status = 405; // method not allowed
+    }
 
     Ok((
         vec![
