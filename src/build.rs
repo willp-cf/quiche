@@ -36,6 +36,25 @@ const CMAKE_PARAMS_ANDROID: &[(&str, &[(&str, &str)])] = &[
     ]),
 ];
 
+const CMAKE_PARAMS_IOS: &[(&str, &[(&str, &str)])] = &[
+    ("aarch64", &[
+        ("CMAKE_OSX_ARCHITECTURES", "arm64"),
+        ("CMAKE_OSX_SYSROOT", "iphoneos"),
+    ]),
+    ("arm", &[
+        ("CMAKE_OSX_ARCHITECTURES", "arm"),
+        ("CMAKE_OSX_SYSROOT", "iphoneos"),
+    ]),
+    ("x86", &[
+        ("CMAKE_OSX_ARCHITECTURES", "x86"),
+        ("CMAKE_OSX_SYSROOT", "iphonesimulator"),
+    ]),
+    ("x86_64", &[
+        ("CMAKE_OSX_ARCHITECTURES", "x86_64"),
+        ("CMAKE_OSX_SYSROOT", "iphonesimulator"),
+    ]),
+];
+
 /// Generate the platform-specific output path for lib
 ///
 /// MSVC generator on Windows place static libs in a target sub-folder,
@@ -62,6 +81,8 @@ fn get_boringssl_cmake_config() -> cmake::Config {
     // It doesn't execute cmake until .build(), so initialize here
     let mut boringssl_cmake = cmake::Config::new("deps/boringssl");
 
+    eprintln!("arch={} os={}", arch, os);
+
     // Add platform-specific parameters
     return match os.as_ref() {
         "android" => {
@@ -73,11 +94,27 @@ fn get_boringssl_cmake_config() -> cmake::Config {
                     for (name, value) in *params {
                         let value = value
                             .replace("${ANDROID_NDK_HOME}", &android_ndk_home);
-                        eprintln!("arch={} add {}={}", arch, name, value);
+                        eprintln!("android arch={} add {}={}", arch, name, value);
                         boringssl_cmake.define(name, value);
                     }
                 }
             }
+
+            boringssl_cmake
+        },
+        "ios" => {
+            for (ios_arch, params) in CMAKE_PARAMS_IOS {
+                if *ios_arch == arch {
+                    for (name, value) in *params {
+                        eprintln!("ios arch={} add {}={}", arch, name, value);
+                        boringssl_cmake.define(name, value);
+                    }
+                }
+            }
+
+            // bitcode on
+            boringssl_cmake.define("CMAKE_ASM_FLAGS", "-fembed-bitcode");
+            boringssl_cmake.cflag("-fembed-bitcode");
 
             boringssl_cmake
         },
