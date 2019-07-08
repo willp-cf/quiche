@@ -29,12 +29,22 @@ The Examples [Dockerfile](Dockerfile) builds a Debian image.
 
 To build:
 
-```
+```bash
 docker build -t cloudflare-quiche .
 ```
 
 To make an HTTP/3 request:
 
+```bash
+docker run -it --rm cloudflare-quiche http3-client https://cloudflare-quic.com
 ```
-docker run -it cloudflare-quiche http3-client https://cloudflare-quic.com
+
+To make it easier to run you can create an alias in your `~/.bash_profile` or similar:
+```bash
+alias http3-client="docker run -it --rm cloudflare-quiche http3-client"
+```
+
+and to use it:
+```bash
+http3-client https://cloudflare-quic.com
 ```
